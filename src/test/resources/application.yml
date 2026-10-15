@@ -11,6 +11,7 @@ spring:
 
 logging:
   level:
+    com.dangdang: debug              # 우리 코드의 log.debug 출력
     org.hibernate.SQL: debug
     org.hibernate.orm.jdbc.bind: trace
     org.hibernate.stat: warn
