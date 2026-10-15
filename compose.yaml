@@ -1,0 +1,17 @@
+services:
+  mysql:
+    image: 'mysql:8.4'
+    environment:
+      - 'MYSQL_DATABASE=dangdang'
+      - 'MYSQL_USER=dangdang'
+      - 'MYSQL_PASSWORD=dangdang'
+      - 'MYSQL_ROOT_PASSWORD=root'
+      - 'TZ=Asia/Seoul'
+    ports:
+      # 로컬 MySQL과 충돌하지 않도록 3307 사용 (DBeaver 등 접속: localhost:3307)
+      - '3307:3306'
+    volumes:
+      - dangdang-mysql:/var/lib/mysql
+
+volumes:
+  dangdang-mysql:

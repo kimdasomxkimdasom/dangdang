@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: dangdang
+  # 실행 시 compose.yaml 의 MySQL 컨테이너를 자동으로 띄우고 접속 정보도 자동 주입됨
+  docker:
+    compose:
+      lifecycle-management: start-only
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: create        # 학습용. 엔티티가 안정되면 validate + Flyway 로 전환해보기
+    properties:
+      hibernate:
+        format_sql: true
+        highlight_sql: true
+        use_sql_comments: true   # JPQL/QueryDSL 원본이 SQL 위에 주석으로 찍힘
+        generate_statistics: false
+        # default_batch_fetch_size: 100   # [2주차] N+1 해결 실습 때 주석 해제
+
+logging:
+  level:
+    org.hibernate.SQL: debug
+    org.hibernate.orm.jdbc.bind: trace   # 바인딩 파라미터 값 출력
