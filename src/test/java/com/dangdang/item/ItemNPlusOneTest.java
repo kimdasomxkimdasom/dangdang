@@ -3,6 +3,7 @@ package com.dangdang.item;
 import com.dangdang.TestcontainersConfiguration;
 import com.dangdang.category.Category;
 import com.dangdang.member.Member;
+import com.dangdang.support.SqlCaptor;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +15,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -55,6 +59,7 @@ class ItemNPlusOneTest {
 
         statistics = emf.unwrap(SessionFactory.class).getStatistics();
         statistics.clear();
+        SqlCaptor.clear();
     }
 
     @Test
@@ -93,8 +98,37 @@ class ItemNPlusOneTest {
         assertThat(statistics.getPrepareStatementCount()).isEqualTo(1);
     }
 
+    @Test
+    @DisplayName("[Hibernate 7] 컬렉션 fetch join + 페이징 → 서브쿼리로 상품만 먼저 limit 후 이미지 join")
+    void collectionFetchJoinWithPaging() {
+        Page<Item> page = itemRepository.findPageWithSellerAndImages(
+                PageRequest.of(0, 3, Sort.by(Sort.Direction.DESC, "id")));
+
+        String selectSql = SqlCaptor.sqls().stream()
+                .filter(sql -> sql.contains("join") && !sql.contains("count("))
+                .findFirst()
+                .orElseThrow();
+        log.debug("[컬렉션 fetch join + 페이징] 실행된 SQL = {}", selectSql);
+
+        // Hibernate 5/6 은 limit 없이 20행(상품 10 x 이미지 2)을 전부 가져와 메모리에서 잘랐음 (HHH90003004 경고)
+        // Hibernate 7 은 SQL 을 아래처럼 바꿔서 DB 에서 페이징함
+        //   select ... from (select ... from item join member order by item_id desc limit ?,?) i
+        //   left join item_image ... order by item_id desc, sort_order
+        assertThat(selectSql).containsIgnoringCase("from (select");
+        assertThat(selectSql).containsIgnoringCase("limit");
+
+        assertThat(page.getContent()).hasSize(3);
+        assertThat(page.getTotalElements()).isEqualTo(ITEM_COUNT);
+        // 정렬이 서브쿼리 안에서 적용되어 최신 상품 3개가 나옴 (setUp 에서 "맥북 0" ~ "맥북 9" 순으로 저장)
+        assertThat(page.getContent()).extracting(Item::getTitle)
+                .containsExactly("맥북 9", "맥북 8", "맥북 7");
+        // 이미지가 잘리지 않고 상품마다 2장씩 모두 채워짐
+        assertThat(page.getContent()).allSatisfy(it -> assertThat(it.getImages()).hasSize(2));
+        // 본 쿼리 1번 + count 쿼리 1번
+        assertThat(statistics.getPrepareStatementCount()).isEqualTo(2);
+    }
+
     // TODO [2주차] 남은 실습
-    //  1) images(컬렉션)까지 fetch join + 페이징 하면 어떤 경고가 뜨는지 확인
     //  2) default_batch_fetch_size / @BatchSize 로 해결
     //  3) 목표: 페이징 가능 + 쿼리 2~3번 이내
 }
